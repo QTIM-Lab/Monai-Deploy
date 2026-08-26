@@ -1,0 +1,7 @@
+scikit-image
+setuptools>=59.5.0
+Pillow
+matplotlib
+monai-deploy-app-sdk==4.0.0
+holoscan-cli==4.2.0
+holoscan-cu13==4.2.0

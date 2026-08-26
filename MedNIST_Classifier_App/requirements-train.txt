@@ -1,0 +1,7 @@
+# Host pyenv only (monai_deploy, python 3.10) - never baked into the MAP.
+monai[pillow, tqdm, ignite, gdown]
+pydicom>=2.3.0
+highdicom>=0.18.2
+monai-deploy-app-sdk==4.0.0
+holoscan-cli==4.2.0
+holoscan-cu13==4.2.0
