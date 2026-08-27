@@ -1,0 +1,11 @@
+# Host pyenv only (monai_deploy, python 3.10) - never baked into the MAP.
+# torchvision must come from the cu130 index so it does not pull a different torch:
+#   pip install torchvision --index-url https://download.pytorch.org/whl/cu130
+monai
+torchvision
+pydicom>=2.3.0
+highdicom>=0.18.2
+Pillow>=8.4.0
+monai-deploy-app-sdk==4.0.0
+holoscan-cli==4.2.0
+holoscan-cu13==4.2.0
