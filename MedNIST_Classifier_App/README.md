@@ -21,7 +21,6 @@ echo $HOLOSCAN_MODEL_PATH
 # An empty MedNIST_DATA/MedNIST/ makes the script skip extraction, so clear it first
 ```bash
 python MedNIST_Classifier_App/all_in_one_train.py
-
 ls -la MedNIST_Classifier_App/models/model/
 ```
 

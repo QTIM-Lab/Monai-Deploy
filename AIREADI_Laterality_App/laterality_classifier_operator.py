@@ -99,7 +99,7 @@ class LateralityClassifierOperator(Operator):
         from PIL import Image as PILImage
 
         pil = PILImage.fromarray(img).convert("RGB").resize((IMAGE_SIZE, IMAGE_SIZE), PILImage.BILINEAR)
-        x = torch.from_numpy(np.asarray(pil, dtype=np.uint8)).permute(2, 0, 1).float().div_(255.0)
+        x = torch.from_numpy(np.asarray(pil, dtype=np.uint8)).permute(2, 0, 1).float().div_(255.0) # HWC → CHW -> float32 -> [0,255] -> [0,1]
         mean = torch.tensor(MEAN).view(3, 1, 1)
         std = torch.tensor(STD).view(3, 1, 1)
         return ((x - mean) / std)[None]  # (1, 3, 224, 224)

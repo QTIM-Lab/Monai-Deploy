@@ -18,12 +18,24 @@ echo $HOLOSCAN_OUTPUT_PATH
 ```
 
 ```bash
-monai-deploy package Simple_Image_Processing -c Simple_Image_Processing/app.yaml -t simple_imaging_app:1.0 --platform x86_64 -l DEBUG
+monai-deploy package Simple_Image_Processing \
+  -c Simple_Image_Processing/app.yaml \
+  -t simple_imaging_app:1.0 \
+  --platform x86_64 \
+  -l DEBUG
 ```
+
+```bash
+docker images | grep simple_imaging_app
+```
+
 
 # Fails as user = 1000:1000 (holoscan: /home/holoscan/.local/...) "built" this above (you can't see but it's part of monai deploy)
 ```bash
-monai-deploy run -i Simple_Image_Processing/test_input_folder -o Simple_Image_Processing/output_path simple_imaging_app-x64-workstation-dgpu-linux-amd64:1.0
+monai-deploy run \
+  -i Simple_Image_Processing/test_input_folder \
+  -o Simple_Image_Processing/output_path \
+  simple_imaging_app-x64-workstation-dgpu-linux-amd64:1.0
 ```
 
 # Works as you are a root docker user...not ideal

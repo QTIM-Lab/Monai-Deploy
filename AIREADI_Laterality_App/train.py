@@ -28,7 +28,7 @@ def load_split(split):
     y = np.load(os.path.join(CACHE_DIR, f"{split}_y.npy"))
 
     x = torch.from_numpy(x).permute(0, 3, 1, 2).float().div_(255.0)  # (N, 3, 224, 224)
-    x = (x - MEAN) / STD
+    x = (x - MEAN) / STD # Normalization
     return TensorDataset(x, torch.from_numpy(y))
 
 

@@ -1,2 +1,13 @@
 MedNIST_Classifier_App/MedNIST_DATA/
 *.ts
+shadow_mode/runs/
+__pycache__/
+
+# Secrets. .env.example is the committed contract; .env never is.
+.env
+.env.*
+!.env.example
+
+# Derived by prepare_data.py / train.py — rebuilt from /persist, not transferred.
+AIREADI_Laterality_App/cache/
+AIREADI_Laterality_App/demo_input/

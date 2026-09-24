@@ -1,0 +1,287 @@
+"""The execution interface, and the staging/collection logic shared by backends.
+
+`MapExecutor.run(map_name, input_path, output_path)` is the whole contract the
+rest of Shadow Mode is allowed to depend on. Today two backends implement it by
+shelling out to a container runtime; later one could dispatch to MONAI Deploy
+Workflow Manager without any caller changing.
+
+Subclasses supply only `_build_command`. Everything hard — staging exactly one
+input, permission pre-flight, timeouts, artifact collection — lives here so the
+backends stay comparable.
+"""
+
+import logging
+import os
+import shutil
+import stat
+import subprocess
+import tempfile
+import time
+import uuid
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+from shadow_mode.config import MapSpec, get_map
+
+logger = logging.getLogger(__name__)
+
+
+class MapExecutionError(RuntimeError):
+    """A MAP failed to run, or ran and exited non-zero.
+
+    Carries the full RunResult so callers can log stderr without re-running.
+    """
+
+    def __init__(self, message: str, result: "RunResult"):
+        super().__init__(message)
+        self.result = result
+
+
+@dataclass
+class RunResult:
+    """Outcome of one MAP invocation."""
+
+    map_name: str
+    image: str
+    backend: str
+    input_path: Path
+    output_dir: Path
+    command: List[str]
+    returncode: Optional[int]
+    stdout: str
+    stderr: str
+    duration_s: float
+    timed_out: bool = False
+    artifacts: List[Path] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return self.returncode == 0 and not self.timed_out
+
+    def summary(self) -> str:
+        state = "ok" if self.ok else ("timeout" if self.timed_out else f"exit {self.returncode}")
+        return (
+            f"[{self.backend}] {self.map_name} {state} in {self.duration_s:.1f}s "
+            f"-> {len(self.artifacts)} artifact(s) in {self.output_dir}"
+        )
+
+
+def _describe_mode(path: Path) -> str:
+    st = path.stat()
+    return f"uid={st.st_uid} gid={st.st_gid} mode={stat.filemode(st.st_mode)}"
+
+
+def _accessible_to(path: Path, uid: int, gid: int, need_write: bool) -> bool:
+    """Would a process running as uid/gid be able to read (or write) this path?
+
+    Approximates the kernel's check using the owner/group/other triad. Ignores
+    supplementary groups and ACLs, so it can report a false negative — hence it
+    drives a warning-grade error message, not a hard gate on anything subtle.
+    """
+    st = path.stat()
+    if st.st_uid == uid:
+        shift = 6
+    elif st.st_gid == gid:
+        shift = 3
+    else:
+        shift = 0
+
+    needed = 0o4 | (0o2 if need_write else 0)
+    if path.is_dir():
+        needed |= 0o1  # traversal
+    return (st.st_mode >> shift) & needed == needed
+
+
+class MapExecutor(ABC):
+    """Runs a MAP against a single input file and collects what it produced."""
+
+    backend = "abstract"
+
+    @abstractmethod
+    def _build_command(self, spec: MapSpec, stage_dir: Path, output_dir: Path, run_name: str) -> List[str]:
+        """Return the argv that runs `spec` with the given bind-mount directories."""
+
+    def _cleanup_after_timeout(self, run_name: str) -> None:
+        """Best-effort removal of a container left behind by a timeout."""
+        subprocess.run(
+            ["docker", "rm", "--force", run_name],
+            capture_output=True,
+            check=False,
+        )
+
+    def run(self, map_name: str, input_path: Path, output_path: Path) -> RunResult:
+        """Execute one MAP.
+
+        Args:
+            map_name: key into the MAP registry in shadow_mode.config.
+            input_path: a single input file, or a directory holding exactly one.
+            output_path: directory to collect artifacts into. Created if absent.
+
+        Returns:
+            RunResult describing the invocation and listing new/changed files.
+
+        Raises:
+            MapExecutionError: the MAP timed out or exited non-zero.
+        """
+        spec = get_map(map_name)
+        source = self._resolve_input(input_path, spec)
+        output_dir = self._prepare_output_dir(Path(output_path), spec)
+
+        # The MAP writes into output_dir, which may already hold artifacts from
+        # an earlier run. Diffing a before/after snapshot is what makes the
+        # reported artifact list honest in that case.
+        before = self._snapshot(output_dir)
+
+        run_name = f"shadow-{spec.name}-{uuid.uuid4().hex[:8]}"
+        stage_dir = Path(tempfile.mkdtemp(prefix="shadow-stage-"))
+        try:
+            staged = self._stage(source, stage_dir, spec)
+            command = self._build_command(spec, stage_dir, output_dir, run_name)
+
+            logger.info("running %s via %s: %s", spec.name, self.backend, " ".join(command))
+            started = time.monotonic()
+            timed_out = False
+            try:
+                proc = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    timeout=spec.timeout_s,
+                    check=False,
+                )
+                returncode, stdout, stderr = proc.returncode, proc.stdout, proc.stderr
+            except subprocess.TimeoutExpired as exc:
+                timed_out = True
+                returncode = None
+                stdout = exc.stdout.decode() if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+                stderr = exc.stderr.decode() if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+                self._cleanup_after_timeout(run_name)
+            except FileNotFoundError as exc:
+                raise MapExecutionError(
+                    f"{self.backend} backend could not start: {exc}",
+                    RunResult(
+                        map_name=spec.name,
+                        image=spec.image,
+                        backend=self.backend,
+                        input_path=staged,
+                        output_dir=output_dir,
+                        command=command,
+                        returncode=None,
+                        stdout="",
+                        stderr=str(exc),
+                        duration_s=0.0,
+                    ),
+                ) from exc
+            duration = time.monotonic() - started
+        finally:
+            shutil.rmtree(stage_dir, ignore_errors=True)
+
+        after = self._snapshot(output_dir)
+        artifacts = sorted(path for path, fingerprint in after.items() if before.get(path) != fingerprint)
+
+        result = RunResult(
+            map_name=spec.name,
+            image=spec.image,
+            backend=self.backend,
+            input_path=source,
+            output_dir=output_dir,
+            command=command,
+            returncode=returncode,
+            stdout=stdout,
+            stderr=stderr,
+            duration_s=duration,
+            timed_out=timed_out,
+            artifacts=artifacts,
+        )
+
+        if not result.ok:
+            raise MapExecutionError(self._failure_message(result), result)
+
+        if not artifacts:
+            # Exit 0 with nothing written almost always means the loader found
+            # no input it recognised — worth surfacing rather than calling it a
+            # success.
+            logger.warning("%s exited 0 but produced no artifacts in %s", spec.name, output_dir)
+
+        logger.info("%s", result.summary())
+        return result
+
+    @staticmethod
+    def _failure_message(result: RunResult) -> str:
+        reason = f"timed out after {result.duration_s:.0f}s" if result.timed_out else f"exited {result.returncode}"
+        tail = (result.stderr or result.stdout or "").strip().splitlines()[-20:]
+        detail = "\n".join(tail) if tail else "<no output captured>"
+        return f"MAP {result.map_name!r} ({result.backend} backend) {reason}.\nLast output:\n{detail}"
+
+    @staticmethod
+    def _resolve_input(input_path: Path, spec: MapSpec) -> Path:
+        """Pick the single file this run will process.
+
+        The laterality MAP's loader does `next(input_folder.glob("*.dcm"))`, so
+        staging two files would make the choice depend on glob order. Refusing
+        an ambiguous directory here is what keeps a run reproducible.
+        """
+        path = Path(input_path).expanduser().resolve()
+        if not path.exists():
+            raise FileNotFoundError(f"Input not found: {path}")
+
+        if path.is_file():
+            if path.suffix.lower() not in spec.input_suffixes:
+                raise ValueError(
+                    f"MAP {spec.name!r} expects {'/'.join(spec.input_suffixes)}, got {path.suffix or '<no suffix>'}: {path}"
+                )
+            return path
+
+        candidates = sorted(p for p in path.iterdir() if p.is_file() and p.suffix.lower() in spec.input_suffixes)
+        if not candidates:
+            raise FileNotFoundError(f"No {'/'.join(spec.input_suffixes)} file in {path}")
+        if len(candidates) > 1:
+            names = ", ".join(p.name for p in candidates[:5])
+            raise ValueError(
+                f"{path} holds {len(candidates)} inputs ({names}...). This MAP processes one file "
+                f"per run; pass a single file rather than letting glob order decide."
+            )
+        return candidates[0]
+
+    def _prepare_output_dir(self, output_dir: Path, spec: MapSpec) -> Path:
+        output_dir = output_dir.expanduser().resolve()
+        existed = output_dir.exists()
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        if not existed:
+            # The MAP writes as its packaging user, not as us. A default-umask
+            # directory we own would be unwritable to it.
+            os.chmod(output_dir, 0o777)
+
+        if not _accessible_to(output_dir, spec.package_uid, spec.package_gid, need_write=True):
+            raise PermissionError(
+                f"Output directory {output_dir} ({_describe_mode(output_dir)}) is not writable by the MAP's "
+                f"user {spec.package_uid}:{spec.package_gid}. The MAP runs as its packaging user, not as you; "
+                f"grant group/other write or choose a different directory."
+            )
+        return output_dir
+
+    @staticmethod
+    def _stage(source: Path, stage_dir: Path, spec: MapSpec) -> Path:
+        """Copy the one input into an isolated directory the MAP's user can read.
+
+        mkdtemp gives 0700 owned by us. Bind-mounted into a container running as
+        a different user, that is unreadable — so widen both directory and file.
+        """
+        os.chmod(stage_dir, 0o755)
+        staged = stage_dir / source.name
+        shutil.copy2(source, staged)
+        os.chmod(staged, 0o644)
+        return staged
+
+    @staticmethod
+    def _snapshot(directory: Path) -> Dict[Path, Tuple[int, int]]:
+        """Map every file under `directory` to a (size, mtime_ns) fingerprint."""
+        snapshot: Dict[Path, Tuple[int, int]] = {}
+        for path in directory.rglob("*"):
+            if path.is_file():
+                st = path.stat()
+                snapshot[path] = (st.st_size, st.st_mtime_ns)
+        return snapshot
