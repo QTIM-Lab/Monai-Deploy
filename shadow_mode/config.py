@@ -27,9 +27,14 @@ class MapSpec:
     gpu: bool = True
     timeout_s: int = 600
 
-    # Which file types this MAP's loader understands. The executor stages
-    # exactly one matching file per run.
+    # Which file types this MAP's loader understands. For single-file MAPs the
+    # executor stages exactly one matching file per run.
     input_suffixes: Tuple[str, ...] = (".dcm",)
+
+    # True for MAPs built on the SDK's DICOMDataLoaderOperator: they take a whole
+    # DICOM tree (a batch, nested dirs, non-DICOM files ignored) and select what
+    # they can score themselves. The executor then stages the input as-is.
+    accepts_tree: bool = False
 
     # The UID/GID the image was packaged with. MAP dependencies install into
     # that user's site-packages (/home/holoscan/.local/lib/python3.12/...).
@@ -43,6 +48,15 @@ class MapSpec:
 
 
 MAPS = {
+    # The canonical MAP (maps/aireadi_laterality): any DICOM tree in, one SR per
+    # scored image out, each linked to its source.
+    "aireadi_laterality": MapSpec(
+        name="aireadi_laterality",
+        image="aireadi_laterality-x64-workstation-dgpu-linux-amd64:0.1.0",
+        accepts_tree=True,
+        timeout_s=1800,
+    ),
+    # The tutorial MAP (AIREADI_Laterality_App): one file per run, SR not linked.
     "laterality": MapSpec(
         name="laterality",
         image="airead_laterality_app-x64-workstation-dgpu-linux-amd64:1.0",

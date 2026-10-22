@@ -1,5 +1,8 @@
 # Shadow Mode
 
+> **Parked (2026-10-21).** Orchestration now uses MONAI Deploy Express (`MONAI_Deploy_Express/LOCAL_SETUP.md`).
+> Kept as-is for later; `python -m shadow_mode.run_map` is still handy for running a MAP on local files.
+
 AI inference running *alongside* the imaging workflow rather than inside it.
 
 > Moving this to another machine? Read **[HANDOFF.md](HANDOFF.md)** first. The
@@ -20,7 +23,7 @@ container image, not as source.
 | 1 | inspect the repo | done |
 | 2 | **local MAP runner** | **done — this code** |
 | 3 | Orthanc input | not started (blocked on credentials for `:8043`) |
-| 4 | upload SR back to Orthanc | not started |
+| 4 | upload SR back to Orthanc | SR linking solved in the MAP (`maps/aireadi_laterality`); upload not built |
 | 5 | Orthanc trigger | not started |
 
 ## Phase 2 usage

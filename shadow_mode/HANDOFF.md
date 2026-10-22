@@ -81,7 +81,7 @@ workflow without controlling it.
 | 1 | Inspect the repo | **done** |
 | 2 | Local MAP runner (`local DICOM -> MAP -> output`) | **done, verified** |
 | 3 | Orthanc input (download instance, run MAP) | not started |
-| 4 | Round trip (upload SR back, referencing source) | not started |
+| 4 | Round trip (upload SR back, referencing source) | **SR linking solved in the MAP** (2026-10-16); round trip proven via MONAI Deploy Express, not yet via Shadow Mode's own Orthanc client |
 | 5 | Orthanc trigger (OnStoredInstance / change polling) | not started |
 
 Do not skip ahead. The user explicitly wants the smallest working vertical slice
@@ -441,7 +441,23 @@ confident wrong answer, not an error.
 
 ---
 
-## 7. KNOWN GAP — the SR is orphaned (blocks Phase 4)
+## 7. RESOLVED 2026-10-16 — the SR was orphaned; the MAP now owns the link
+
+**Current state:** `maps/aireadi_laterality/` is the canonical laterality MAP (SDK loader +
+series selector, batched, any DICOM tree in). Its SR writer (`maps/aireadi_laterality/map_ops/`, highdicom
+TID 1500) puts each SR in its source's study and references the source image. Verified on a
+24-image batch (24/24 correct, all linked) and end to end through MONAI Deploy Express.
+Registered in `shadow_mode/config.py` as `aireadi_laterality` (`accepts_tree=True`). Read the
+MAP's README; it supersedes the SR-fix plan below. Shadow Mode therefore needs **no**
+reference-injection step: upload the MAP's output folder as-is, and use
+`map_ops.verify_outputs` as a pre-upload check if wanted.
+
+Two Holoscan packager bugs found on the way (both silent; see `maps/aireadi_laterality/map_ops/README.md` and
+`MONAI_Deploy_Express/LOCAL_DOCS/`): `--add` of a flat directory is dropped, and the image
+launcher swallows the app's exit code. `shadow_mode`'s executor now detects the latter from the
+launcher's `Application exited with N` line.
+
+Original analysis, kept for the reasoning:
 
 Verified against monai-deploy-app-sdk 4.0.0 by reading
 `monai/deploy/operators/dicom_utils.py::write_common_modules`.
