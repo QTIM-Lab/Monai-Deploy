@@ -1,0 +1,12 @@
+# Baked into the MAP by `monai-deploy package`. Keep the SDK/Holoscan pins in step with
+# the host packaging env (see shadow_mode/HANDOFF.md section 4).
+monai-deploy-app-sdk==4.0.0
+holoscan-cu13==4.2.0
+monai>=1.2.0
+setuptools>=59.5.0 # for pkg_resources
+
+# Pinned, not ranged: decoding and SR encoding are part of the model contract.
+# pydicom 3 converts YBR->RGB in pixel_array; pydicom 2 does not (see model_spec.py).
+pydicom==3.0.2
+highdicom==0.28.2
+Pillow>=8.4.0

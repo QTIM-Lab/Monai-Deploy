@@ -1,0 +1,13 @@
+%YAML 1.2
+---
+application:
+  title: AI-READI Laterality Classifier (research use only)
+  version: 0.1.0
+  inputFormats: ["file"]
+  outputFormats: ["file"]
+
+resources:
+  cpu: 2
+  gpu: 1
+  memory: 8Gi
+  gpuMemory: 2Gi

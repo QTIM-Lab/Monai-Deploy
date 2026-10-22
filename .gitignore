@@ -2,6 +2,9 @@ MedNIST_Classifier_App/MedNIST_DATA/
 *.ts
 shadow_mode/runs/
 __pycache__/
+*/output/
+*.zip
+
 
 # Secrets. .env.example is the committed contract; .env never is.
 .env
