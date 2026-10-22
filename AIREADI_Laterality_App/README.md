@@ -1,5 +1,9 @@
 # AI-READI Laterality Classifier App
 
+> Tutorial MAP and the model's training code. The **deployable** MAP is
+> [`maps/aireadi_laterality`](../maps/aireadi_laterality/): batch input, SRs linked to their source
+> images. It packages the `models/model/model.ts` that `train.py` here produces.
+
 # Classifies a retinal fundus DICOM as left (L) or right (R) eye.
 # Same three-operator shape as the MedNIST apps, with a DICOM loader instead of PIL
 # and a ResNet18 instead of DenseNet121.
@@ -62,7 +66,9 @@ monai-deploy run \
   airead_laterality_app-x64-workstation-dgpu-linux-amd64:1.0
 ```
 
-# Result: L or R in output.json, plus a DICOM SR from DICOMTextSRWriterOperator.
+# Result: L or R in output.json, plus a Basic Text SR ("R"/"L") from DICOMTextSRWriterOperator.
+# That SR is NOT linked to the image: blank PatientID, new StudyInstanceUID (copy_tags=False, and the
+# SDK writer never references the source). Fine for the tutorial; use maps/aireadi_laterality to deploy.
 # The demo DICOM filenames carry the ground truth (..._cfp_l_... / ..._cfp_r_...).
 ```bash
 cat AIREADI_Laterality_App/output/output.json
@@ -78,3 +84,9 @@ ls -la AIREADI_Laterality_App/output/
 #    preprocess(). They must agree. Drift there degrades the model silently.
 # 4. torchvision is host-only. TorchScript bakes the model source into model.ts, so the
 #    MAP does not need the architecture library at inference time.
+# 5. Colour decoding defect (training side). pydicom 3's pixel_array already converts YBR to RGB;
+#    prepare_data.py converts a second time (its comment describes pydicom 2). The current model.ts
+#    learned from those miscoloured images, and both MAPs reproduce the same decoding, so results are
+#    consistent. To fix: drop the convert_color_space call in prepare_data.py (and in this app's
+#    load_dicom_operator.py), retrain, and in maps/aireadi_laterality/model_spec.py set
+#    REPRODUCE_TRAINING_DOUBLE_YBR_CONVERSION = False and bump ALGORITHM_VERSION.
