@@ -28,8 +28,12 @@ curl --request DELETE "http://$1:$2/config/source/ORTHANC" | jq
 printf "\nDeleting existing DICOM Destination\n"
 curl --request DELETE "http://$1:$2/config/destination/ORTHANC" | jq
 
+# LOCAL CHANGE: loop guard. The AE ignores the SOP classes our MAPs produce (SR family and
+# SEG), so results exported back to Orthanc can never be fed in again as input, whatever
+# the sender's routing does. The IG accepts and discards them; the association still succeeds.
+IGNORED_SOP_CLASSES='"1.2.840.10008.5.1.4.1.1.88.11","1.2.840.10008.5.1.4.1.1.88.22","1.2.840.10008.5.1.4.1.1.88.33","1.2.840.10008.5.1.4.1.1.88.34","1.2.840.10008.5.1.4.1.1.88.35","1.2.840.10008.5.1.4.1.1.66.4"'
 printf "\nAdding MONAI Deploy AE Title\n"
-curl --request POST "http://$1:$2/config/ae" --header "Content-Type: application/json" --data-raw "{\"name\": \"MONAI-DEPLOY\",\"aeTitle\": \"MONAI-DEPLOY\"}"  | jq
+curl --request POST "http://$1:$2/config/ae" --header "Content-Type: application/json" --data-raw "{\"name\": \"MONAI-DEPLOY\",\"aeTitle\": \"MONAI-DEPLOY\",\"ignoredSopClasses\": [$IGNORED_SOP_CLASSES]}"  | jq
 printf "\nAdding DICOM Source\n"
 curl --request POST "http://$1:$2/config/source" --header "Content-Type: application/json" --data-raw "{\"name\": \"ORTHANC\",\"hostIp\": \"$4\",\"aeTitle\": \"ORTHANC\"}"  | jq
 printf "\nAdding DICOM Destination\n"

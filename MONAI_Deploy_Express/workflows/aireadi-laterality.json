@@ -1,0 +1,83 @@
+{
+	"name": "aireadi-laterality",
+	"version": "2.0.0",
+	"description": "AIREADI laterality: router keeps OP series, the MAP writes SRs already linked to their source images, export C-STOREs them back to Orthanc",
+	"informatics_gateway": {
+		"ae_title": "MONAI-DEPLOY",
+		"data_origins": [
+			"ORTHANC"
+		],
+		"export_destinations": [
+			"ORTHANC"
+		]
+	},
+	"tasks": [
+		{
+			"id": "router",
+			"description": "Only ophthalmic photography goes to the laterality model",
+			"type": "router",
+			"task_destinations": [
+				{
+					"name": "laterality",
+					"conditions": [
+						"{{ context.dicom.series.any('0008','0060') }} == 'OP'"
+					]
+				}
+			]
+		},
+		{
+			"id": "laterality",
+			"description": "AIREADI laterality MAP: any DICOM tree in, one linked TID 1500 SR per scored image out (maps/aireadi_laterality)",
+			"type": "docker",
+			"args": {
+				"container_image": "aireadi_laterality-x64-workstation-dgpu-linux-amd64:0.1.0",
+				"server_url": "unix:///var/run/docker.sock",
+				"entrypoint": "/bin/bash,-c",
+				"command": "python3 -u /opt/holoscan/app",
+				"task_timeout_minutes": "30",
+				"temp_storage_container_path": "/var/lib/mde/",
+				"env_HOLOSCAN_INPUT_PATH": "/var/holoscan/input/",
+				"env_HOLOSCAN_OUTPUT_PATH": "/var/holoscan/output/"
+			},
+			"artifacts": {
+				"input": [
+					{
+						"name": "env_HOLOSCAN_INPUT_PATH",
+						"value": "{{ context.input.dicom }}"
+					}
+				],
+				"output": [
+					{
+						"name": "env_HOLOSCAN_OUTPUT_PATH",
+						"mandatory": true
+					}
+				]
+			},
+			"task_destinations": [
+				{
+					"name": "export-sr"
+				}
+			]
+		},
+		{
+			"id": "export-sr",
+			"description": "C-STORE the MAP's output folder (DICOM only) back to Orthanc",
+			"type": "export",
+			"export_destinations": [
+				{
+					"Name": "ORTHANC"
+				}
+			],
+			"artifacts": {
+				"input": [
+					{
+						"name": "export-dicom",
+						"value": "{{ context.executions.laterality.artifacts.env_HOLOSCAN_OUTPUT_PATH }}",
+						"mandatory": true
+					}
+				],
+				"output": []
+			}
+		}
+	]
+}

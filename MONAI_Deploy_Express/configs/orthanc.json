@@ -5,7 +5,7 @@
   "StorageCompression": false,
   "MaximumStorageSize": 0,
   "MaximumPatientCount": 0,
-  "LuaScripts": [],
+  "LuaScripts": ["/etc/orthanc/autoroute.lua"],
   "Plugins": [
     "/usr/share/orthanc/plugins",
     "/usr/local/share/orthanc/plugins"
@@ -54,7 +54,7 @@
   "HttpsCACertificates": "",
   "UserMetadata": {},
   "UserContentType": {},
-  "StableAge": 60,
+  "StableAge": 15,
   "StrictAetComparison": false,
   "StoreMD5ForAttachments": true,
   "LimitFindResults": 0,

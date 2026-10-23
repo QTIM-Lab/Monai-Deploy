@@ -1,0 +1,12 @@
+# Local overrides on top of upstream MONAI Deploy Express 0.6.0 (docker-compose.yml is unmodified).
+services:
+  minio:
+    # The Bitnami image wraps minio in its own entrypoint and runs as uid 1001;
+    # run the binary directly as root to match upstream's minio/minio behaviour.
+    entrypoint: ["minio"]
+    user: "0:0"
+
+  orthanc:
+    # Auto-forward uploads to MONAI-DEPLOY; referenced from LuaScripts in configs/orthanc.json.
+    volumes:
+      - ./configs/orthanc-autoroute.lua:/etc/orthanc/autoroute.lua:ro
