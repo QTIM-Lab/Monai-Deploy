@@ -76,6 +76,11 @@ docker container prune -f --filter label=org.monai.deploy.app-sdk
 - MAP images and workflows are not in git: build MAPs per `../maps/`, and re-POST `workflows/*.json`
   after wiping `.md/`.
 
+## Upstream
+
+This folder is a `git subtree` of `Project-MONAI/monai-deploy` (`deploy/monai-deploy-express`, at `0c1f13a`), so
+MONAI's updates can be merged in. How: [LOCAL_DOCS/upstream.md](LOCAL_DOCS/upstream.md).
+
 ## Local changes
 
 | File | Change | Why |
