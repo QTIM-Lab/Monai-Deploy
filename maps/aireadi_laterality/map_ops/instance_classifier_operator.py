@@ -27,9 +27,10 @@ class InstanceClassifierOperator(Operator):
     """Named input:  study_selected_series_list (from DICOMSeriesSelectorOperator)
     Named output: findings, List[ImageFinding], one per instance scored
 
-    One bad instance does not end the run: unsupported or undecodable instances are
-    logged and skipped. The run fails only if instances were selected and none could
-    be scored, which points at a systematic problem rather than a bad file.
+    Instances the model isn't for (spec.UnsupportedImage) are skipped quietly; a series of only
+    those finishes with no findings, which is a normal outcome. Undecodable instances are errors:
+    logged and skipped, and the run fails only if errors left nothing scored, which points at a
+    systematic problem rather than one bad file.
     """
 
     def __init__(self, fragment: Fragment, *args, app_context: AppContext, model_spec, batch_size: int = 16, **kwargs):
@@ -64,7 +65,8 @@ class InstanceClassifierOperator(Operator):
         self._logger.info(f"{len(instances)} instance(s) selected across {len(selected)} study(ies), on {self.device}")
 
         findings: List[ImageFinding] = []
-        skipped: List[Tuple[str, str]] = []
+        skipped: List[Tuple[str, str]] = []  # not for this model: fine
+        errors: List[Tuple[str, str]] = []  # couldn't read: a problem
         for start in range(0, len(instances), self.batch_size):
             tensors, kept = [], []
             for ds in instances[start : start + self.batch_size]:
@@ -74,13 +76,15 @@ class InstanceClassifierOperator(Operator):
                 except self.model_spec.UnsupportedImage as exc:
                     skipped.append((ds.SOPInstanceUID, str(exc)))
                 except Exception as exc:  # undecodable pixel data and the like
-                    skipped.append((ds.SOPInstanceUID, f"{type(exc).__name__}: {exc}"))
+                    errors.append((ds.SOPInstanceUID, f"{type(exc).__name__}: {exc}"))
             if not tensors:
                 continue
 
             with torch.no_grad():
                 probabilities = torch.softmax(self.model(torch.stack(tensors).to(self.device)), dim=1).cpu()
 
+            # Probability rounded to 4 places: GPU results can differ by ~1e-7 between batch sizes, and the
+            # SR must be identical whether an image was scored alone or in a batch.
             for ds, probs in zip(kept, probabilities):
                 index = int(probs.argmax())
                 findings.append(
@@ -88,7 +92,7 @@ class InstanceClassifierOperator(Operator):
                         source=ds,
                         evaluations=[CodedEvaluation(self.model_spec.FINDING, self.model_spec.CLASSES[index])],
                         measurements=[
-                            NumericMeasurement(self.model_spec.CONFIDENCE, round(float(probs[index]), 6), self.model_spec.UNITY)
+                            NumericMeasurement(self.model_spec.CONFIDENCE, round(float(probs[index]), 4), self.model_spec.UNITY)
                         ],
                     )
                 )
@@ -97,9 +101,11 @@ class InstanceClassifierOperator(Operator):
                 )
 
         for sop, reason in skipped:
-            self._logger.warning(f"skipped {sop}: {reason}")
-        self._logger.info(f"scored {len(findings)}, skipped {len(skipped)}")
+            self._logger.info(f"skipped {sop}: {reason}")
+        for sop, reason in errors:
+            self._logger.warning(f"error on {sop}: {reason}")
+        self._logger.info(f"scored {len(findings)}, skipped {len(skipped)}, errors {len(errors)}")
 
-        if instances and not findings:
-            raise RuntimeError(f"none of {len(instances)} selected instance(s) could be scored; see warnings above")
+        if errors and not findings:
+            raise RuntimeError(f"none of {len(instances)} selected instance(s) could be read; see warnings above")
         op_output.emit(findings, self.output_name)

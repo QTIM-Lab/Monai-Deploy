@@ -10,12 +10,15 @@ Each SR:
   - identifies the algorithm (name, version) per TID 4019 and the observer device;
   - carries the coded evaluations and numeric measurements.
 
-All SRs produced for one source study in one run share a Series, so a batch adds one
-AI series per study instead of one per image.
+Deterministic: the same source image and algorithm version always give the same SR, with the
+same UIDs, whether it was scored alone, in a study or in a batch. SOP Instance UID derives from
+(source SOP Instance UID, algorithm, version); Series Instance UID from (study, algorithm,
+version), so each study gets one AI series per model version. No clock or random values are
+written. With Orthanc's OverwriteInstances off, a re-send is ignored as already stored and a
+new version is stored alongside.
 """
 
-from collections import OrderedDict
-from typing import Dict, Iterable, List, Optional
+from typing import Iterable, List
 
 import highdicom as hd
 from pydicom.sr.codedict import codes
@@ -28,6 +31,15 @@ from map_ops.image_finding import ImageFinding
 # pydicom's dictionary, so the procedure defaults to a private-scheme code. Override per MAP.
 DEFAULT_PROCEDURE = Code("AI-IMAGE-ANALYSIS", "99QTIM", "AI image analysis")
 
+# Root for the UIDs we mint: pydicom's public root, as earlier SRs used. Never change it
+# casually: every UID would change.
+UID_ROOT = "1.2.826.0.1.3680043.8.498."
+
+
+def stable_uid(*parts: str) -> str:
+    """Same parts -> same UID, always (SHA-512 of the parts under UID_ROOT)."""
+    return generate_uid(prefix=UID_ROOT, entropy_srcs=["map_ops-sr", *map(str, parts)])
+
 
 def algorithm_device_uid(algorithm_name: str, algorithm_version: str) -> str:
     """A stable UID for the algorithm as an observer device.
@@ -38,28 +50,38 @@ def algorithm_device_uid(algorithm_name: str, algorithm_version: str) -> str:
     return generate_uid(entropy_srcs=["map_ops-algorithm", algorithm_name, algorithm_version])
 
 
+def _remove_volatile(sr: hd.sr.ComprehensiveSR, source) -> None:
+    """Replace what highdicom fills from the clock with values tied to the source image."""
+    sr.ContentDate = source.get("ContentDate") or source.get("StudyDate") or "19000101"
+    sr.ContentTime = source.get("ContentTime") or source.get("StudyTime") or "000000"
+    for keyword in ("InstanceCreationDate", "InstanceCreationTime", "SeriesDate", "SeriesTime"):
+        if keyword in sr:
+            delattr(sr, keyword)
+    for item in sr.get("ContributingEquipmentSequence", []):
+        if "ContributionDateTime" in item:
+            del item.ContributionDateTime
+
+
 def build_sr(
     finding: ImageFinding,
     *,
     algorithm_name: str,
     algorithm_version: str,
-    series_instance_uid: str,
-    series_number: int,
-    instance_number: int,
     manufacturer: str,
     series_description: str,
     procedure_reported: Code = DEFAULT_PROCEDURE,
-    sop_instance_uid: Optional[str] = None,
+    series_number: int = 9000,
 ) -> hd.sr.ComprehensiveSR:
     """One SR for one source image."""
     source = finding.source
+    key = (algorithm_name, algorithm_version)
 
     algorithm = hd.sr.AlgorithmIdentification(name=algorithm_name, version=algorithm_version)
     observer = hd.sr.ObservationContext(
         observer_device_context=hd.sr.ObserverContext(
             observer_type=codes.DCM.Device,
             observer_identifying_attributes=hd.sr.DeviceObserverIdentifyingAttributes(
-                uid=algorithm_device_uid(algorithm_name, algorithm_version),
+                uid=algorithm_device_uid(*key),
                 name=algorithm_name,
                 manufacturer_name=manufacturer,
                 model_name=f"{algorithm_name} {algorithm_version}",
@@ -68,7 +90,9 @@ def build_sr(
     )
 
     group = hd.sr.MeasurementsAndQualitativeEvaluations(
-        tracking_identifier=hd.sr.TrackingIdentifier(uid=generate_uid(), identifier=algorithm_name),
+        tracking_identifier=hd.sr.TrackingIdentifier(
+            uid=stable_uid("tracking", source.SOPInstanceUID, *key), identifier=algorithm_name
+        ),
         algorithm_id=algorithm,
         qualitative_evaluations=[hd.sr.QualitativeEvaluation(e.name, e.value) for e in finding.evaluations] or None,
         measurements=[
@@ -91,13 +115,13 @@ def build_sr(
         referenced_images=[source],
     )
 
-    return hd.sr.ComprehensiveSR(
+    sr = hd.sr.ComprehensiveSR(
         evidence=[source],
         content=report,
-        series_instance_uid=series_instance_uid,
+        series_instance_uid=stable_uid("series", source.StudyInstanceUID, *key),
         series_number=series_number,
-        sop_instance_uid=sop_instance_uid or generate_uid(),
-        instance_number=instance_number,
+        sop_instance_uid=stable_uid("sr", source.SOPInstanceUID, *key),
+        instance_number=int(source.get("InstanceNumber") or 1),
         manufacturer=manufacturer,
         manufacturer_model_name=algorithm_name,
         software_versions=algorithm_version,
@@ -106,30 +130,10 @@ def build_sr(
         is_final=False,
         is_verified=False,
     )
+    _remove_volatile(sr, source)
+    return sr
 
 
 def build_srs(findings: Iterable[ImageFinding], **kwargs) -> List[hd.sr.ComprehensiveSR]:
-    """SRs for a batch: one per finding, one shared Series per source study.
-
-    kwargs are build_sr's, minus the per-instance series/instance numbering.
-    """
-    series_number = kwargs.pop("series_number", 9000)
-    by_study: Dict[str, List[ImageFinding]] = OrderedDict()
-    for finding in findings:
-        by_study.setdefault(finding.source.StudyInstanceUID, []).append(finding)
-
-    srs = []
-    for study_findings in by_study.values():
-        series_uid = generate_uid()
-        for number, finding in enumerate(study_findings, start=1):
-            srs.append(
-                build_sr(
-                    finding,
-                    series_instance_uid=series_uid,
-                    series_number=series_number,
-                    instance_number=number,
-                    **kwargs,
-                )
-            )
-    return srs
-
+    """SRs for a batch: one per finding. kwargs are build_sr's."""
+    return [build_sr(finding, **kwargs) for finding in findings]

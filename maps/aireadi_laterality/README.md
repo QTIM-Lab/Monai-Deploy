@@ -12,9 +12,10 @@ Research use only. The model is ours (a ResNet18 trained in
 | | |
 |---|---|
 | **Input** | Any DICOM tree at `/var/holoscan/input`: one image or a batch, nested directories, any mix of modalities. Non-DICOM files are ignored. |
-| **Selected** | Series with `Modality == OP` (`model_spec.SELECTION_RULES`). Within them, single-frame colour instances. Everything else is skipped, not an error. |
+| **Selected** | Series with `Modality == OP` and `ImageType` containing `COLOR` (`model_spec.SELECTION_RULES`); `Modality OP` also holds infrared, autofluorescence, OCT companion images and report screenshots. Within them, single-frame colour instances. Everything else is skipped, not an error; a series with nothing to score finishes with no output. |
 | **Output** | DICOM only, at `/var/holoscan/output`: one TID 1500 Comprehensive SR per scored image. Safe to C-STORE the whole folder. |
 | **Each SR** | Same Patient and Study as its source; new AI series (one per study per run); evidence and Image Library reference the source SOP; `Laterality = Left/Right` (SCT 272741003 / 7771000 / 24028007); `Probability` (DCM 122157); algorithm name and version (TID 4019). |
+| **Deterministic** | Same image + same `ALGORITHM_VERSION` → byte-identical SR with the same UIDs (alone, per study or in a batch). One AI series per study per version. With Orthanc `OverwriteInstances: false`, re-sends are ignored and a new version is stored alongside. |
 | **Failure** | A bad instance is logged and skipped. The run fails only if instances were selected and none could be scored. |
 
 ## Layout
@@ -74,9 +75,9 @@ From the repo root, in the `monai_deploy` pyenv. The model is not in git
 monai-deploy package maps/aireadi_laterality \
   -c maps/aireadi_laterality/app.yaml \
   -m AIREADI_Laterality_App/models \
-  -t aireadi_laterality:0.1.0 \
+  -t aireadi_laterality:0.2.0 \
   --platform x86_64 -l INFO
-# -> aireadi_laterality-x64-workstation-dgpu-linux-amd64:0.1.0
+# -> aireadi_laterality-x64-workstation-dgpu-linux-amd64:0.2.0
 ```
 
 Keep the tag in step with `ALGORITHM_VERSION`.
@@ -94,7 +95,7 @@ python maps/aireadi_laterality/tools/make_test_batch.py /tmp/lat_batch --patient
 mkdir -p /tmp/lat_out && chmod 777 /tmp/lat_out
 docker run --rm --gpus all --ulimit stack=33554432 \
   -v /tmp/lat_batch:/var/holoscan/input:ro -v /tmp/lat_out:/var/holoscan/output \
-  aireadi_laterality-x64-workstation-dgpu-linux-amd64:0.1.0
+  aireadi_laterality-x64-workstation-dgpu-linux-amd64:0.2.0
 #   or: python -m shadow_mode.run_map /tmp/lat_batch --map aireadi_laterality
 
 # 4. Every SR linked, every eligible image scored once, nothing else scored

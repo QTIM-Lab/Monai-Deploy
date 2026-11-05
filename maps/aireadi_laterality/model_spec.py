@@ -30,7 +30,7 @@ from pydicom.sr.coding import Code
 # --- Identity --------------------------------------------------------------------------
 
 ALGORITHM_NAME = "aireadi-laterality"
-ALGORITHM_VERSION = "0.1.0"
+ALGORITHM_VERSION = "0.2.0"  # 0.2.0: deterministic SR UIDs (same model weights as 0.1.0)
 
 # Name of the model under /opt/holoscan/models. "" means the only model packaged.
 MODEL_NAME = ""
@@ -54,17 +54,21 @@ PROCEDURE = Code("AI-FUNDUS-LATERALITY", "99QTIM", "AI laterality of fundus phot
 
 # --- Input: what the model may see -----------------------------------------------------
 
-# DICOMSeriesSelectorOperator rules. Anchor regexes: the selector falls back to an
-# unanchored re.search, so "OP" would also match OCT's "OPT".
-# The model was trained on Topcon Maestro2 macula-centred colour photographs only. To
-# restrict to that domain, add  "ManufacturerModelName": "Maestro2"  to the conditions
-# (matched against the first instance of each series).
+# DICOMSeriesSelectorOperator rules, matched against each series' first instance.
+# - Modality: anchor the regex; the selector falls back to an unanchored re.search, so "OP"
+#   would also match OCT's "OPT".
+# - ImageType: `Modality OP` also holds infrared, autofluorescence, OCT companion images and
+#   report screenshots, many stored as 3-channel, so SamplesPerPixel can't tell them apart.
+#   ImageType's 4th value can (COLOR / Color vs IR, INFRARED, AUTOFLUORESCENCE, 3D Macula,
+#   OCTReport...). For a list value the selector checks the term is contained, case-insensitive.
+# The model was trained on Topcon Maestro2 macula-centred colour photographs only. To restrict to
+# that device, add  "ManufacturerModelName": "Maestro2".
 SELECTION_RULES = json.dumps(
     {
         "selections": [
             {
                 "name": "colour_fundus_photograph",
-                "conditions": {"Modality": "^OP$"},
+                "conditions": {"Modality": "^OP$", "ImageType": ["COLOR"]},
             }
         ]
     }
@@ -95,6 +99,9 @@ def to_rgb(ds: pydicom.Dataset) -> np.ndarray:
     Uses pydicom's functional pixel_array, which does not cache the decoded array on the
     dataset; ds.pixel_array would keep ~15 MB per image alive for the whole batch.
     """
+    image_type = [str(v).upper() for v in ds.get("ImageType", [])]
+    if "COLOR" not in image_type:
+        raise UnsupportedImage(f"ImageType={image_type}, not a colour photograph")
     if int(ds.get("SamplesPerPixel", 1)) != 3:
         raise UnsupportedImage(f"SamplesPerPixel={ds.get('SamplesPerPixel')}, expected 3 (colour)")
     if int(ds.get("NumberOfFrames", 1) or 1) != 1:
