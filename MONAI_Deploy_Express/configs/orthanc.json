@@ -38,6 +38,16 @@
       "MONAI-DEPLOY",
       "informatics-gateway",
       104
+    ],
+    "LATERALITY": [
+      "LATERALITY",
+      "informatics-gateway",
+      104
+    ],
+    "VESSELS": [
+      "VESSELS",
+      "informatics-gateway",
+      104
     ]
   },
   "DicomModalitiesInDatabase": false,
@@ -73,7 +83,7 @@
   "SynchronousCMove": true,
   "JobsHistorySize": 10,
   "SaveJobs": true,
-  "OverwriteInstances": true,
+  "OverwriteInstances": false,  // LOCAL CHANGE: stored results are never replaced; a new model version attaches alongside
   "MediaArchiveSize": 1,
   "StorageAccessOnFind": "Always",
   "MetricsEnabled": true,

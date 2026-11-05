@@ -7,9 +7,14 @@ data `.md/minio/data/`. Image swapped to `bitnamilegacy/minio:2024.6.11` (see `.
 
 The services never read or write Orthanc directly; they hand files to each other through MinIO. Per
 payload it holds the received images, each task's output (the SRs) and sidecars. The WM deletes them
-after `dataRetentionDays` (10, `configs/workflow-manager.json`). Orthanc stays the only long-term copy.
+according to `dataRetentionDays`. Orthanc stays the only long-term copy.
 
-Consequence: for up to 10 days there is a second copy of every image sent to MONAI. A result whose
+Which value applies (`PayloadService.GetExpiry`): the **workflow's** `dataRetentionDays` if set, else the
+app setting in `configs/workflow-manager.json`. The WM stores **3** on any workflow that doesn't state it,
+so the app setting is effectively unused. To change it, put `"dataRetentionDays": N` in `workflows/*.json`
+and run `register.py`; `-1` = keep forever. It applies to payloads received after the change.
+
+Consequence: for that many days (1 for laterality) there is a second copy of every image sent to MONAI. A result whose
 export was delayed (see [workflow-manager.md](workflow-manager.md)) waits here:
 `.md/minio/data/monaideploy/<payload_id>/workflows/<run>/<task_execution>/`.
 
@@ -26,6 +31,9 @@ Compass: `ssh -L 27017:127.0.0.1:27017 ophlapps04`, connect to `mongodb://root:r
 ```bash
 docker exec -it mdl-mongodb mongosh -u root -p rootpassword    # shell
 ```
+
+After `reset.sh monai|all` the MongoDB container is new: disconnect and reconnect Compass / the VS Code
+extension, or they keep showing an empty, stale view.
 
 Wiping `.md/mongodb/` loses registered workflows (re-POST `workflows/*.json`) and IG config (recreated by
 `configure-ig` at start).

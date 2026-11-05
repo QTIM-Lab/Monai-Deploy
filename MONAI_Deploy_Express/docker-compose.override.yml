@@ -10,3 +10,5 @@ services:
     # Auto-forward uploads to MONAI-DEPLOY; referenced from LuaScripts in configs/orthanc.json.
     volumes:
       - ./configs/orthanc-autoroute.lua:/etc/orthanc/autoroute.lua:ro
+    environment:
+      AUTOROUTE: ${ORTHANC_AUTOROUTE:-off}  # set in .env (off); on = auto-send every new series

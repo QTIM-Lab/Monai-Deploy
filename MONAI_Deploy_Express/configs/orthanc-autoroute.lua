@@ -16,6 +16,9 @@ local TARGET = 'MONAI-DEPLOY'     -- IG listening AE (DicomModalities entry in o
 local MONAI_SCU = 'MONAISCU'      -- IG export AE: results arrive from this one
 
 function OnStableSeries(seriesId, tags, metadata)
+  -- Off by default (.env ORTHANC_AUTOROUTE=off). Turn on: ORTHANC_AUTOROUTE=on docker compose up -d orthanc
+  if os.getenv('AUTOROUTE') == 'off' then return end
+
   local series = ParseJson(RestApiGet('/series/' .. seriesId))
   local meta = ParseJson(RestApiGet('/instances/' .. series['Instances'][1] .. '/metadata?expand'))
   if meta['RemoteAET'] == MONAI_SCU then

@@ -1,0 +1,84 @@
+{
+	"name": "fundus-vessels",
+	"version": "1.1.0",
+	"dataRetentionDays": 1,
+	"description": "VascX vessel segmentation: router keeps colour fundus photos, the MAP writes one SEG per image linked to its source, export C-STOREs them back to Orthanc",
+	"informatics_gateway": {
+		"ae_title": "MONAI-DEPLOY",
+		"data_origins": [
+			"ORTHANC"
+		],
+		"export_destinations": [
+			"ORTHANC"
+		]
+	},
+	"tasks": [
+		{
+			"id": "router",
+			"description": "Only colour fundus photographs (Modality OP, ImageType contains COLOR/Color) go to the laterality model; a payload is one series (IG groups per series)",
+			"type": "router",
+			"task_destinations": [
+				{
+					"name": "vessels",
+					"conditions": [
+						"{{ context.dicom.series.any('0008','0060') }} == 'OP' AND {{ context.dicom.series.any('0008','0008') }} CONTAINS ['COLOR', 'Color']"
+					]
+				}
+			]
+		},
+		{
+			"id": "vessels",
+			"description": "VascX fundus_vessels MAP (maps/fundus_vessels): any DICOM tree in, one SEG per colour photo out",
+			"type": "docker",
+			"args": {
+				"container_image": "fundus_vessels-x64-workstation-dgpu-linux-amd64:0.2.0",
+				"server_url": "unix:///var/run/docker.sock",
+				"entrypoint": "/bin/bash,-c",
+				"command": "python3 -u /opt/holoscan/app",
+				"task_timeout_minutes": "30",
+				"temp_storage_container_path": "/var/lib/mde/",
+				"env_HOLOSCAN_INPUT_PATH": "/var/holoscan/input/",
+				"env_HOLOSCAN_OUTPUT_PATH": "/var/holoscan/output/"
+			},
+			"artifacts": {
+				"input": [
+					{
+						"name": "env_HOLOSCAN_INPUT_PATH",
+						"value": "{{ context.input.dicom }}"
+					}
+				],
+				"output": [
+					{
+						"name": "env_HOLOSCAN_OUTPUT_PATH",
+						"mandatory": false
+					}
+				]
+			},
+			"task_destinations": [
+				{
+					"name": "export-seg"
+				}
+			]
+		},
+		{
+			"id": "export-seg",
+			"description": "C-STORE the MAP's output folder (DICOM SEG only) back to Orthanc; own task name so it can't collide with export-sr",
+			"type": "export",
+			"export_destinations": [
+				{
+					"Name": "ORTHANC"
+				}
+			],
+			"artifacts": {
+				"input": [
+					{
+						"name": "export-dicom",
+						"value": "{{ context.executions.vessels.artifacts.env_HOLOSCAN_OUTPUT_PATH }}",
+						"mandatory": false
+					}
+				],
+				"output": []
+			}
+		}
+	]
+}

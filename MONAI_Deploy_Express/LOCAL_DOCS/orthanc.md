@@ -4,7 +4,11 @@ Container `mdl-orthanc`, config `configs/orthanc.json`, data `.md/orthanc/`. Sta
 Orthanc on another server. It knows nothing about MONAI: `MONAI-DEPLOY` is just a DICOM modality.
 
 ```json
-"DicomModalities": { "MONAI-DEPLOY": ["MONAI-DEPLOY", "informatics-gateway", 104] }
+"DicomModalities": {
+  "MONAI-DEPLOY": ["MONAI-DEPLOY", "informatics-gateway", 104],   // auto-run target
+  "LATERALITY":   ["LATERALITY",   "informatics-gateway", 104],   // per-MAP AEs: tests, backfills
+  "VESSELS":      ["VESSELS",      "informatics-gateway", 104]
+}
 ```
 
 ## The auto-route Lua (`configs/orthanc-autoroute.lua`)
@@ -21,6 +25,15 @@ Mounted by `docker-compose.override.yml`, loaded by `"LuaScripts"` in `orthanc.j
 `MONAISCU` is the IG's **export** AE (`dicom.scu.aeTitle` in `configs/informatics-gateway.json`). It is
 not `MONAI-DEPLOY`, the AE the IG listens on. If the two drift, the IG's `ignoredSopClasses` still stops
 a loop.
+
+**Off by default:** `ORTHANC_AUTOROUTE=off` in `.env` (the override passes it in as `AUTOROUTE`), because overlapping
+runs delay exports (IG bug, PR #544). Turn on: `ORTHANC_AUTOROUTE=on docker compose up -d orthanc`; a plain
+`docker compose up -d orthanc` turns it off again. Images in `.md/orthanc/` survive either.
+
+**`OverwriteInstances: false`** (upstream: true): a result already stored is never replaced. A re-send of the same
+SOP Instance UID is answered with success and ignored (`Instance already stored` in the log), so exports still
+succeed. Our MAPs (laterality 0.2.0+, VascX 0.2.0+) use deterministic UIDs, so re-sends never duplicate or overwrite;
+a new model version has new UIDs and is stored alongside.
 
 Changes take effect on `docker compose restart orthanc`. Check it: `docker logs mdl-orthanc 2>&1 | grep autoroute`.
 

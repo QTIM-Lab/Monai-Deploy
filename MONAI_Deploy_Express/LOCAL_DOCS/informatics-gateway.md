@@ -6,7 +6,8 @@ start by the `configure-ig` service running `configs/config-ig.sh`. `.md/mdig/` 
 
 | Thing | Value | Set in |
 |---|---|---|
-| Listening AE | `MONAI-DEPLOY`, grouping by study (`0020,000D`), 5 s timeout | `config-ig.sh` |
+| Listening AE | `MONAI-DEPLOY`, grouping per **series** (`0020,000E`), 5 s timeout; triggers every workflow whose `ae_title` matches | `config-ig.sh` |
+| Per-MAP AEs | `LATERALITY`, `VESSELS`: `workflows: [<that workflow's id>]` so only it runs; settings copied from `MONAI-DEPLOY` | `LOCAL_SCRIPTS/register.py` |
 | Loop guard | AE `ignoredSopClasses`: SR 88.11/22/33/34/35, SEG 66.4 | `config-ig.sh` |
 | Accepted sender | source `ORTHANC` = AE `ORTHANC` @ 172.29.0.100 | `config-ig.sh` |
 | Export target | destination `ORTHANC` = 172.29.0.100:4242 | `config-ig.sh` |
@@ -24,7 +25,9 @@ curl -X POST http://127.0.0.1:5000/config/ae -H 'Content-Type: application/json'
 
 Behaviour worth knowing:
 
-- Each group (study) that arrives becomes one payload, which becomes one workflow run.
+- Each group (series) that arrives becomes one payload, which becomes one run per triggered workflow.
+- An AE with `workflows` set triggers exactly those workflow ids, ignoring `ae_title` matching. Ids change
+  when MongoDB is wiped, so per-MAP AEs are created by `register.py`, not `config-ig.sh`.
 - Ignored SOP classes are accepted (C-STORE success) and discarded; log line:
   `Instance ignored due to matching SOP Class UID`.
 - Above the watermark it **rejects every association** (`NoReasonGiven`). `/scratch90` is ~97 % full.
