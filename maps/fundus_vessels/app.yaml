@@ -1,0 +1,13 @@
+%YAML 1.2
+---
+application:
+  title: Fundus Vessel Segmentation, VascX (research use only)
+  version: 0.2.0
+  inputFormats: ["file"]
+  outputFormats: ["file"]
+
+resources:
+  cpu: 2
+  gpu: 1
+  memory: 8Gi
+  gpuMemory: 4Gi

@@ -6,6 +6,7 @@ pipeline: Orthanc → MONAI Deploy Express → our MAPs → linked DICOM SRs bac
 |---|---|
 | `Simple_Image_Processing/`, `MedNIST_Classifier_App/`, `MedNIST_Classifier_App_Pre-Built_Model/` | App SDK tutorials (below) |
 | `AIREADI_Laterality_App/` | laterality model: training code, model weights, tutorial-style MAP |
+| `VascX_App/` | VascX vessel-segmentation model: weights fetch (`fetch_model.sh`) |
 | [`maps/`](maps/) | **deployable MAPs** and their shared operators |
 | [`MONAI_Deploy_Express/`](MONAI_Deploy_Express/LOCAL_SETUP.md) | upstream Express 0.6.0 running the MAPs; our changes in `LOCAL_SETUP.md` |
 | `shadow_mode/` | parked: a custom orchestrator explored before Express |

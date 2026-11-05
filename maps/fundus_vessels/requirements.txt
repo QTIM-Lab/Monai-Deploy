@@ -1,0 +1,14 @@
+# Baked into the MAP by `monai-deploy package`. Keep the SDK/Holoscan pins in step with
+# the host packaging env (see shadow_mode/HANDOFF.md section 4).
+monai-deploy-app-sdk==4.0.0
+holoscan-cu13==4.2.0
+monai==1.6.1
+torch==2.14.1  # pinned: numerics are part of idempotency (same UID must mean same mask)
+setuptools>=59.5.0 # for pkg_resources
+
+# Pinned, not ranged: decoding and SEG encoding are part of the contract.
+pydicom==3.0.2
+highdicom==0.28.2  # map_ops/seg_builder.py works around a 0.28 limitation; recheck on upgrade
+
+# VascX's own fundus cropping (AGPL-3.0). Pinned: it defines what the model sees.
+retinalysis-fundusprep==1.3.0

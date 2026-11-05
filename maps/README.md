@@ -5,7 +5,8 @@ a MAP only *uses* a trained model.
 
 | MAP | Input | Output | Image |
 |---|---|---|---|
-| [aireadi_laterality](aireadi_laterality/) | colour fundus photos (`Modality OP`) | TID 1500 SR per image: Left / Right + probability | `aireadi_laterality-x64-workstation-dgpu-linux-amd64:0.1.0` |
+| [aireadi_laterality](aireadi_laterality/) | colour fundus photos (`Modality OP`, `ImageType` contains `COLOR`) | TID 1500 SR per image: Left / Right + probability | `aireadi_laterality-x64-workstation-dgpu-linux-amd64:0.2.0` |
+| [fundus_vessels](fundus_vessels/) | colour fundus photos (`Modality OP`, `ImageType` contains `COLOR`) | binary SEG per image: retinal vessels (VascX) | `fundus_vessels-x64-workstation-dgpu-linux-amd64:0.2.0` |
 
 ## The contract every MAP here follows
 
@@ -16,8 +17,10 @@ a MAP only *uses* a trained model.
 3. **Linked:** every output (SR or SEG) sits in its source's study and references the source images.
    The MAP owns this; nothing downstream repairs results.
 4. **Versioned:** algorithm name and version are stamped into every result.
+5. **Deterministic:** result UIDs derive from (source image, algorithm, version), with no clock or random
+   values, so re-runs never duplicate and a new version attaches alongside.
 
-Check any MAP's output against 2 and 3: `PYTHONPATH=maps/<name> python -m map_ops.verify_outputs IN OUT`.
+Check any MAP's output against 2 and 3: `PYTHONPATH=maps/aireadi_laterality python -m map_ops.verify_outputs IN OUT` (works for SR and SEG).
 
 ## Anatomy of a MAP
 
@@ -32,8 +35,10 @@ maps/<name>/
     tools/            optional checks (preprocessing parity, batch scoring)
 ```
 
-Which writer: SDK `DICOMSegmentationWriterOperator` for segmentations (already linked to the source);
-`map_ops` `ImageFindingSRWriterOperator` for classifications and scalars. Details: [aireadi_laterality/map_ops/README.md](aireadi_laterality/map_ops/README.md).
+Which writer: `map_ops` `ImageFindingSRWriterOperator` for classifications and scalars. For
+segmentations the SDK `DICOMSegmentationWriterOperator` links to the source but writes only one SEG per
+run (first series, then stops) and fails on OP 8-bit photos in highdicom 0.28; `maps/fundus_vessels/`
+carries its own per-image SEG writer for that. Details: [aireadi_laterality/map_ops/README.md](aireadi_laterality/map_ops/README.md).
 
 ## Adding a MAP
 
