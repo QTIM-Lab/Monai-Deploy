@@ -1,0 +1,18 @@
+# Workspace env for VascX experiments: notebooks, evaluation, prototyping. See setup_env.sh.
+# Not what ships; the MAP's own list is maps/fundus_vessels/requirements.txt.
+
+# --- Same versions as the MAP image: these decide what the model sees and produces. ---
+# Checked against fundus_vessels-x64-workstation-dgpu-linux-amd64:0.1.0 (Python 3.12.3).
+torch==2.14.1
+pydicom==3.0.2
+highdicom==0.28.2
+retinalysis-fundusprep==1.3.0
+
+# --- Upstream's reference inference, to compare against (the MAP doesn't install it). ---
+retinalysis-inference==0.9.0
+
+# --- Experimenting: free to change. ---
+jupyterlab
+ipykernel
+matplotlib
+pandas

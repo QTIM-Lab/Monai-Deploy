@@ -1,0 +1,5 @@
+# Weights are fetched by fetch_model.sh, not committed.
+models/
+reference_models/
+# Per-run outputs of compare_paper_model.py; may hold image UIDs from your PACS.
+results/
