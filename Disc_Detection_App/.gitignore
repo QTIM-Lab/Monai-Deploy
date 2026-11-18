@@ -1,0 +1,5 @@
+# Weights are fetched by fetch_model.sh, not committed.
+models/
+# Copies of the data area's cohort.csv / splits.csv: AI-READI UIDs and paths, which the AI-READI
+# licence doesn't let us redistribute. build_cohort.py regenerates them.
+dataset/

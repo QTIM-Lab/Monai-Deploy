@@ -52,7 +52,7 @@ MAPS = {
     # scored image out, each linked to its source.
     "aireadi_laterality": MapSpec(
         name="aireadi_laterality",
-        image="aireadi_laterality-x64-workstation-dgpu-linux-amd64:0.1.0",
+        image="aireadi_laterality-x64-workstation-dgpu-linux-amd64:0.2.0",
         accepts_tree=True,
         timeout_s=1800,
     ),
