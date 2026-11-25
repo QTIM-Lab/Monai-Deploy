@@ -22,7 +22,7 @@ docker compose up -d   |   docker compose ps   |   docker compose down
 
 ```
 send.py ─▶ IG AE MONAI-DEPLOY ─▶ every workflow ─▶ router ─▶ MAP ─▶ export ─▶ Orthanc (same study)
-send.py ─▶ IG AE LATERALITY / VESSELS ─▶ only that model's workflow
+send.py ─▶ IG AE LATERALITY / VESSELS / DISC-FOVEA ─▶ only that model's workflow
 ```
 
 | Filter | Where | Rule |
@@ -41,8 +41,10 @@ Auto-run: `ORTHANC_AUTOROUTE=on docker compose up -d orthanc` (why it's off: [or
 LOCAL_SCRIPTS/reset.sh orthanc|monai|all     # clear images | MONAI state | everything; re-registers
 python3 LOCAL_SCRIPTS/register.py            # after editing workflows/*.json or adding a MAP AE
 LOCAL_SCRIPTS/upload.sh <dicom folder>       # load DICOM (refuses while auto-run is on)
+python3 LOCAL_SCRIPTS/results.py <MRN>...    # per patient: colour photos vs each model's results [--clear | --delete]
+python3 LOCAL_SCRIPTS/runs.py                # recent runs classified: succeeded / export stuck / router only / MAP failed
 python3 LOCAL_SCRIPTS/send.py --patient <MRN> | --study <UID> | --all  --modality OP \
-        [--ae LATERALITY|VESSELS|MONAI-DEPLOY] [--skip-done "aireadi-laterality 0.2.0"]
+        [--ae LATERALITY|VESSELS|DISC-FOVEA|MONAI-DEPLOY] [--skip-done "aireadi-laterality 0.2.0"]
 ```
 
 `send.py`: one series at a time, waits for each run. Default AE `LATERALITY`; `MONAI-DEPLOY` = all models.
@@ -60,8 +62,10 @@ docker container prune -f --filter label=org.monai.deploy.app-sdk    # exited MA
 
 ## Gotchas
 
-- **Overlapping runs delay exports ~30 min each** (upstream IG bug, PR #544). Run shows `export-… Dispatched`.
-  Hence auto-run off and serial `send.py`. [workflow-manager.md](LOCAL_DOCS/workflow-manager.md)
+- **Overlapping runs lose results with the stock images**: IG refuses a second export ("already queued", ~30 min
+  delay; PR #544) and WM's router misfires under concurrency (run "Succeeded", MAP never ran). **Fixed locally**
+  by patched images: `LOCAL_PATCHES/switch.sh fixed` (51/51 concurrent runs OK; currently `stock` for testing).
+  [LOCAL_PATCHES/](LOCAL_PATCHES/README.md), hands-on comparison [TESTING.md](LOCAL_PATCHES/TESTING.md)
 - **Task Manager** runs jobs in parallel and leaves exited containers. [task-manager.md](LOCAL_DOCS/task-manager.md)
 - **IG rejects all DICOM above the disk watermark** (`/scratch90` ~97% full; set to 99).
 - **MinIO is scratch**, kept per workflow `dataRetentionDays` (1 day). [storage.md](LOCAL_DOCS/storage.md)
@@ -76,10 +80,11 @@ docker container prune -f --filter label=org.monai.deploy.app-sdk    # exited MA
 | File | Change | Why |
 |---|---|---|
 | `.env` | ports on `127.0.0.1`; Orthanc 14242/18042; MinIO image; `ORTHANC_AUTOROUTE=off` | security; dashboard owns 4242/8042; image gone; export bug |
-| `docker-compose.override.yml` | MinIO as root; Lua mount; `AUTOROUTE` switch | Bitnami image; auto-run |
-| `configs/orthanc.json` | Lua, `StableAge` 15, modalities `LATERALITY`/`VESSELS`, `OverwriteInstances` false | auto-run; targeted runs; never replace results |
+| `.env` images, `LOCAL_PATCHES/` | `switch.sh stock\|pr\|fixed`: stock ghcr images, or builds of the fix branches in `../upstream/` (IG PR #544, WM `fix-parser-race`) | overlapping runs lost results |
+| `docker-compose.override.yml` | MinIO as root; Lua mount; `AUTOROUTE` switch; OHIF viewer on | Bitnami image; auto-run; see SR boxes on the image |
+| `configs/orthanc.json` | Lua, `StableAge` 15, modalities `LATERALITY`/`VESSELS`/`DISC-FOVEA`, `OverwriteInstances` false | auto-run; targeted runs; never replace results |
 | `configs/orthanc-autoroute.lua` | **new** | stand-in for a PACS routing rule |
 | `configs/informatics-gateway.json` | `watermarkPercent` 99 | full disk |
 | `configs/config-ig.sh` | grouping per series, `ignoredSopClasses` | correct routing; loop guard |
-| `workflows/*.json` | **new**: laterality (SR), fundus-vessels (SEG) | the pipelines |
+| `workflows/*.json` | **new**: laterality (SR), fundus-vessels (SEG), disc-detection (SR with boxes) | the pipelines |
 | `LOCAL_SETUP.md`, `LOCAL_DOCS/`, `LOCAL_SCRIPTS/` | **new** | this |

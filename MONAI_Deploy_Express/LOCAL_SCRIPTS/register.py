@@ -25,7 +25,7 @@ WM = "http://127.0.0.1:5001"
 WORKFLOWS = Path(__file__).resolve().parent.parent / "workflows"
 
 # AE title (max 16 characters) -> workflow name
-MAP_AES = {"LATERALITY": "aireadi-laterality", "VESSELS": "fundus-vessels"}
+MAP_AES = {"LATERALITY": "aireadi-laterality", "VESSELS": "fundus-vessels", "DISC-FOVEA": "disc-detection"}
 
 
 def call(method, url, body=None, ok=(200, 201)):

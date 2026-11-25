@@ -48,6 +48,11 @@
       "VESSELS",
       "informatics-gateway",
       104
+    ],
+    "DISC-FOVEA": [
+      "DISC-FOVEA",
+      "informatics-gateway",
+      104
     ]
   },
   "DicomModalitiesInDatabase": false,

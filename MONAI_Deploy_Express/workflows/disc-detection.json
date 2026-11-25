@@ -1,0 +1,84 @@
+{
+	"name": "disc-detection",
+	"version": "1.0.0",
+	"dataRetentionDays": 1,
+	"description": "Optic disc + fovea detection (RetinaNet): router keeps colour fundus photos, the MAP writes one SR per image with the boxes drawn on its source, export C-STOREs them back to Orthanc",
+	"informatics_gateway": {
+		"ae_title": "MONAI-DEPLOY",
+		"data_origins": [
+			"ORTHANC"
+		],
+		"export_destinations": [
+			"ORTHANC"
+		]
+	},
+	"tasks": [
+		{
+			"id": "router",
+			"description": "Only colour fundus photographs (Modality OP, ImageType contains COLOR/Color) go to the detector; a payload is one series (IG groups per series)",
+			"type": "router",
+			"task_destinations": [
+				{
+					"name": "disc",
+					"conditions": [
+						"{{ context.dicom.series.any('0008','0060') }} == 'OP' AND {{ context.dicom.series.any('0008','0008') }} CONTAINS ['COLOR', 'Color']"
+					]
+				}
+			]
+		},
+		{
+			"id": "disc",
+			"description": "disc_detection MAP (maps/disc_detection): any DICOM tree in, one SR per colour photo out (disc and fovea boxes)",
+			"type": "docker",
+			"args": {
+				"container_image": "disc_detection-x64-workstation-dgpu-linux-amd64:0.1.0",
+				"server_url": "unix:///var/run/docker.sock",
+				"entrypoint": "/bin/bash,-c",
+				"command": "python3 -u /opt/holoscan/app",
+				"task_timeout_minutes": "30",
+				"temp_storage_container_path": "/var/lib/mde/",
+				"env_HOLOSCAN_INPUT_PATH": "/var/holoscan/input/",
+				"env_HOLOSCAN_OUTPUT_PATH": "/var/holoscan/output/"
+			},
+			"artifacts": {
+				"input": [
+					{
+						"name": "env_HOLOSCAN_INPUT_PATH",
+						"value": "{{ context.input.dicom }}"
+					}
+				],
+				"output": [
+					{
+						"name": "env_HOLOSCAN_OUTPUT_PATH",
+						"mandatory": false
+					}
+				]
+			},
+			"task_destinations": [
+				{
+					"name": "export-disc-sr"
+				}
+			]
+		},
+		{
+			"id": "export-disc-sr",
+			"description": "C-STORE the MAP's output folder (DICOM SR only) back to Orthanc; own task name so it can't collide with the other workflows' exports",
+			"type": "export",
+			"export_destinations": [
+				{
+					"Name": "ORTHANC"
+				}
+			],
+			"artifacts": {
+				"input": [
+					{
+						"name": "export-dicom",
+						"value": "{{ context.executions.disc.artifacts.env_HOLOSCAN_OUTPUT_PATH }}",
+						"mandatory": false
+					}
+				],
+				"output": []
+			}
+		}
+	]
+}

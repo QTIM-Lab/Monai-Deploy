@@ -17,6 +17,10 @@ checkpoints) lives in the data area, `/scratch90/QTIM/Active/Non-IRB/VascX_disc_
 | `prepare_cache.py` | decodes and crops every photo once (512 × 512 fundusprep crop) → `cache_512/` in the data area, so training never touches DICOMs |
 | `train.py` | trains a disc + fovea detector: `--arch fasterrcnn` or `--arch retinanet` (torchvision, same script) → a run folder in the data area's `Models/` |
 | `evaluate.py` | re-runs each run's `best.pt` on every test photo (filtered-out ones too) → per-photo boxes in the data area's `Stats/<run>/` |
+| `detector.py` | the prototype the MAP copies: fundusprep crop → exported RetinaNet → top box per class, mapped back to the photo's pixels |
+| `export_model.py` | the chosen run's `best.pt` → TorchScript in `export/retinanet/` (gitignored), the MAP's model; prints the SHA-256 for `maps/disc_detection/model_spec.py` |
+| `handcheck.py` | hand-check sheet for one patient **from Orthanc**: every colour photo with this App's boxes, VascX's and (once the MAP has run) the stored SR's, plus a CSV to mark ok / not ok → data area's `Stats/handcheck/<patient>/` |
+| `orthanc.py` | fetch a patient or study from Orthanc (copy of `VascX_App/orthanc.py`) |
 | `explore_labels.ipynb` | the research journal: Part 1 the labels (2026-11-05), Part 2 the detectors (2026-11-06): training curves, per-device results, misses, behaviour outside the filter, speed. Writes slide figures to the data area's `Stats/slides/`. **Clear its outputs before committing** (they show AI-READI photos) |
 | `slides/make_deck.py` | builds the talk (`.pptx`, speaker notes) from the notebook's figures → data area's `Stats/slides/`. Needs python-pptx: run with the `corisdb_curation` env |
 | `setup_env.sh` | reuses the `vascx` pyenv env from `VascX_App/` |
@@ -94,6 +98,15 @@ separate script, compared on the same cache, split and metrics.
 5. **Evaluate** (2026-11-06): `python evaluate.py`, then Part 2 of the notebook. Both detectors reach disc IoU 0.935 and fovea
    IoU 0.84–0.85 against VascX; RetinaNet is 2.2× faster, so it's the one for a MAP. Most large misses (mostly Eidon) are VascX
    label errors. Still to do: a hand-checked sample, and MONAI RetinaNet.
+
+6. **Hand check and MAP** (2026-11-18): `export_model.py` (exported = original, 0 difference), then
+   `handcheck.py --patient 1019` on AI-READI test participant 1019 (32 photos, 4 cameras) loaded into the
+   practice Orthanc. Same boxes as `evaluate.py` within 0.13 crop px. Peripheral fields with the disc out of
+   view correctly get no disc box. MAP: [`maps/disc_detection`](../maps/disc_detection/) (SR with the boxes
+   as rectangles on the source image).
+   **Verdict (2026-11-19):** reviewed by eye on 1019 and 8306009 (sheets deleted afterwards; `handcheck.py`
+   regenerates them): good enough to test the MAP at scale. Not a formal grading; the `ok_*` columns are left empty. Open:
+   a score cut-off for consumers, and a targeted check of low-score and model-vs-VascX disagreement photos.
 
 Training data is read from the AI-READI files directly; there are too many images to send through
 Orthanc. Demos and the later MAP check still read from Orthanc, as in the other Apps.

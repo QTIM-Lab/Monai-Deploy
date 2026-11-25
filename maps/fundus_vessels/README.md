@@ -99,3 +99,11 @@ Everything is in `model_spec.py`: bump `ALGORITHM_VERSION`, rewrite `segment()` 
 a `(Rows, Columns)` uint8 mask on the source grid), point `MODEL_NAME` at the new models folder,
 after checking the new model in its own App folder against the one it replaces.
 `app.py` and `map_ops/` should not need to change.
+
+## Known limitation: OHIF doesn't overlay the SEG on the photo (2026-11-19)
+
+OHIF (Orthanc OHIF plugin 1.2 and 1.8) lists the SEG as "unsupported display set" on colour fundus
+photos; it rejects the device's own retinal-layer SEG too. The SEG is standard and linked to its source;
+OHIF's SEG support targets images with patient geometry, which photos don't have (`seg_builder.py`
+supplies a placeholder pixel spacing so highdicom can build it). Parked: the dashboard draws the mask
+itself from the SEG. The disc/fovea SR boxes *do* overlay in OHIF plugin 1.8 (orthancteam/orthanc:latest).

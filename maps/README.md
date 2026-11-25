@@ -7,6 +7,7 @@ a MAP only *uses* a trained model.
 |---|---|---|---|
 | [aireadi_laterality](aireadi_laterality/) | colour fundus photos (`Modality OP`, `ImageType` contains `COLOR`) | TID 1500 SR per image: Left / Right + probability | `aireadi_laterality-x64-workstation-dgpu-linux-amd64:0.2.0` |
 | [fundus_vessels](fundus_vessels/) | colour fundus photos (`Modality OP`, `ImageType` contains `COLOR`) | binary SEG per image: retinal vessels (VascX) | `fundus_vessels-x64-workstation-dgpu-linux-amd64:0.2.0` |
+| [disc_detection](disc_detection/) | colour fundus photos (`Modality OP`, `ImageType` contains `COLOR`) | TID 1500 SR per image: optic disc + fovea boxes (rectangles on the source) + score | `disc_detection-x64-workstation-dgpu-linux-amd64:0.1.0` |
 
 ## The contract every MAP here follows
 
@@ -35,7 +36,8 @@ maps/<name>/
     tools/            optional checks (preprocessing parity, batch scoring)
 ```
 
-Which writer: `map_ops` `ImageFindingSRWriterOperator` for classifications and scalars. For
+Which writer: `map_ops` `ImageFindingSRWriterOperator` for classifications and scalars, and (in
+`disc_detection/map_ops`, which adds `BoxFinding`) for boxes drawn on the source image. For
 segmentations the SDK `DICOMSegmentationWriterOperator` links to the source but writes only one SEG per
 run (first series, then stops) and fails on OP 8-bit photos in highdicom 0.28; `maps/fundus_vessels/`
 carries its own per-image SEG writer for that. Details: [aireadi_laterality/map_ops/README.md](aireadi_laterality/map_ops/README.md).
@@ -49,6 +51,10 @@ carries its own per-image SEG writer for that. Details: [aireadi_laterality/map_
    monai-deploy package maps/<name> -c maps/<name>/app.yaml -m <models dir> -t <name>:<version> --platform x86_64
    ```
    Everything in the folder (including `map_ops/`) goes into the image.
+   If it fails at `RUN pip install monai-deploy-app-sdk` with `ImportError: cannot import name 'cli' from
+   'pip._internal.cli.main'`, run the same command again (it may take 2–3 tries). Intermittent since pip 26.3
+   (2026-11): the packager upgrades pip in the image, and when the next step briefly doesn't see the user
+   site-packages, 26.3's launcher falls back to Ubuntu's older system pip, which lacks `cli`. Not our code.
 3. Test on files: `docker run --rm --gpus all -v <in>:/var/holoscan/input:ro -v <out>:/var/holoscan/output <image>`,
    then `verify_outputs`. The image's launcher hides crashes (exits 0); read the log for
    `Application exited with N`.

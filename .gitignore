@@ -14,3 +14,10 @@ __pycache__/
 # Derived by prepare_data.py / train.py — rebuilt from /persist, not transferred.
 AIREADI_Laterality_App/cache/
 AIREADI_Laterality_App/demo_input/
+
+# Clones of upstream MONAI Deploy services (forks) for contributing fixes; only the README is tracked.
+upstream/*
+!upstream/README.md
+
+# Slide figures and their script: kept locally for reuse, not versioned (captured in the team decks).
+VascX_App/slides/

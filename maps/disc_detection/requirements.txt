@@ -1,0 +1,15 @@
+# Baked into the MAP by `monai-deploy package`. Keep the SDK/Holoscan pins in step with
+# the host packaging env (see shadow_mode/HANDOFF.md section 4).
+monai-deploy-app-sdk==4.0.0
+holoscan-cu13==4.2.0
+monai==1.6.1
+torch==2.14.1  # pinned: numerics are part of idempotency (same UID must mean same boxes)
+torchvision==0.29.1  # the model's NMS and box ops; the version it was trained and exported with
+setuptools>=59.5.0 # for pkg_resources
+
+# Pinned, not ranged: decoding and SR encoding are part of the contract.
+pydicom==3.0.2
+highdicom==0.28.2
+
+# VascX's fundus cropping (AGPL-3.0), as in training. Pinned: it defines what the model sees.
+retinalysis-fundusprep==1.3.0

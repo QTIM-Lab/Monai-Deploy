@@ -46,6 +46,9 @@ launcher: the launcher swallows the app's exit code, so a crashed MAP would repo
 
 ## Known bug: overlapping runs delay exports (~30 min)
 
+**Fixed locally (2026-11-19)** by the patched images in [../LOCAL_PATCHES/](../LOCAL_PATCHES/README.md), which also fix a
+second concurrency bug found then (the router's condition parser, below). What follows is the stock behaviour.
+
 IG log `The export request export-sr is already queued for export`. Cause: the WM names export requests
 after the task (`export-sr`) and the IG refuses a request whose name is already queued. Two studies
 finishing together (e.g. both eyes of one visit) are enough. The refused message is never acknowledged,
@@ -69,3 +72,10 @@ numbers (`StartTime`, `Status: 1`). Workflow status 1 = Succeeded, 2 = Failed; t
   never report types, so the next task is **silently skipped** and the run still says Succeeded. Avoid
   docker → docker hand-offs, or mark such inputs `"mandatory": false`.
 - MinIO retention comes from the workflow's `dataRetentionDays` (default 3), not the app setting ([storage.md](storage.md)).
+
+## Known bug: router misfires when runs overlap (stock 0.2.1-2)
+
+`ConditionalParameterParser` is a singleton that keeps the current workflow instance in fields. Two routers
+evaluating at once clobber it: WM log `FailedToParseCondition ... ArgumentNullException: WorkflowInstance`, the
+condition counts as false, and the run ends `router Succeeded` with no MAP run and no result (2 of 10 in a
+10-way test). Fixed locally by a lock ([../LOCAL_PATCHES/](../LOCAL_PATCHES/README.md)); not reported upstream yet.

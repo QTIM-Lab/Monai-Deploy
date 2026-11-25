@@ -15,7 +15,7 @@ the Workflow Manager has a new run and no run is still in progress, then send th
 
 --skip-done "<algorithm> <version>" makes re-runs idempotent: a series is skipped when its study
 already holds an SR or SEG whose SeriesDescription starts with "AI <algorithm> <version>" and which
-references that series. Laterality: "aireadi-laterality 0.2.0"; VascX: "vascx-vessels 0.2.0". --modality is only a send-side pre-filter to avoid shipping irrelevant series.
+references that series. Laterality: "aireadi-laterality 0.2.0"; VascX: "vascx-vessels 0.2.0"; disc/fovea: "disc-fovea-detection 0.1.0". --modality is only a send-side pre-filter to avoid shipping irrelevant series.
 """
 
 import argparse
